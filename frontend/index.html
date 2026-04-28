@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>论点攻防 - AI 辩论教练</title>
+    <link rel="stylesheet" href="./styles.css" />
+    <script defer src="./app.js"></script>
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">AI Debate Coach</p>
+          <h1>论点攻防</h1>
+        </div>
+
+        <div class="connection-strip" aria-label="连接设置">
+          <label class="api-field">
+            <span>API</span>
+            <input id="apiBaseUrl" type="url" value="http://127.0.0.1:8000" />
+          </label>
+        </div>
+      </header>
+
+      <main class="workspace">
+        <aside class="panel setup-panel" aria-labelledby="setupTitle">
+          <div class="panel-head">
+            <div>
+              <p class="section-kicker">Setup</p>
+              <h2 id="setupTitle">本场设置</h2>
+            </div>
+            <button id="resetButton" class="ghost-button" type="button">新开一场</button>
+          </div>
+
+          <form id="setupForm" class="setup-form">
+            <label class="field-group">
+              <span>辩题</span>
+              <textarea
+                id="topicInput"
+                maxlength="100"
+                rows="4"
+                placeholder="例如：大学教育是否应该全面推行 AI 辅助学习"
+              ></textarea>
+            </label>
+
+            <div class="example-topics" aria-label="示例辩题">
+              <button type="button" data-topic="人工智能是否利大于弊">人工智能是否利大于弊</button>
+              <button type="button" data-topic="短视频平台是否提升了公共讨论质量">短视频与公共讨论</button>
+              <button type="button" data-topic="大学教育是否应该全面推行 AI 辅助学习">AI 辅助学习</button>
+              <button type="button" data-topic="安乐死是否应该合法化">安乐死合法化</button>
+            </div>
+
+            <fieldset class="position-group">
+              <legend>持方</legend>
+              <label>
+                <input type="radio" name="position" value="正方" checked />
+                <span>正方</span>
+              </label>
+              <label>
+                <input type="radio" name="position" value="反方" />
+                <span>反方</span>
+              </label>
+            </fieldset>
+
+            <button id="startButton" class="primary-button" type="submit">开始训练</button>
+          </form>
+
+          <div class="meta-panel">
+            <div>
+              <span>会话</span>
+              <strong id="sessionMeta">未创建</strong>
+            </div>
+            <div>
+              <span>状态</span>
+              <strong id="phaseMeta">待开始</strong>
+            </div>
+          </div>
+        </aside>
+
+        <section class="panel debate-panel" aria-labelledby="debateTitle">
+          <div class="panel-head debate-head">
+            <div>
+              <p class="section-kicker">Debate</p>
+              <h2 id="debateTitle">攻防记录</h2>
+            </div>
+            <div class="round-meter" aria-label="回合进度">
+              <span id="roundLabel">0 / 3</span>
+              <div class="round-track">
+                <span id="roundProgress"></span>
+              </div>
+            </div>
+          </div>
+
+          <div id="debateContext" class="debate-context">
+            <span>辩题未设置</span>
+          </div>
+
+          <div id="messageList" class="message-list" aria-live="polite">
+            <div class="empty-state">
+              <strong>等待开场</strong>
+              <span>创建会话后提交第一轮观点。</span>
+            </div>
+          </div>
+
+          <form id="messageForm" class="composer">
+            <label class="field-group composer-field">
+              <span>本轮观点</span>
+              <textarea
+                id="messageInput"
+                rows="3"
+                placeholder="输入你的论点、论据或反驳方向"
+                disabled
+              ></textarea>
+            </label>
+            <div class="composer-actions">
+              <button id="retryButton" class="ghost-button hidden" type="button">重试本轮</button>
+              <button id="sendButton" class="primary-button" type="submit" disabled>发送</button>
+            </div>
+          </form>
+        </section>
+
+        <aside class="panel report-panel" aria-labelledby="reportTitle">
+          <div class="panel-head">
+            <div>
+              <p class="section-kicker">Report</p>
+              <h2 id="reportTitle">赛后评分</h2>
+            </div>
+            <span id="reportBadge" class="badge">未生成</span>
+          </div>
+
+          <div id="radarWrap" class="radar-wrap" aria-label="评分雷达图">
+            <svg id="radarChart" viewBox="0 0 240 240" role="img" aria-labelledby="radarTitle">
+              <title id="radarTitle">评分雷达图</title>
+              <polygon class="radar-grid grid-outer" points="120,20 206.6,170 33.4,170"></polygon>
+              <polygon class="radar-grid grid-mid" points="120,60 172,150 68,150"></polygon>
+              <polygon class="radar-grid grid-inner" points="120,95 141.7,132.5 98.3,132.5"></polygon>
+              <line class="radar-axis" x1="120" y1="120" x2="120" y2="20"></line>
+              <line class="radar-axis" x1="120" y1="120" x2="206.6" y2="170"></line>
+              <line class="radar-axis" x1="120" y1="120" x2="33.4" y2="170"></line>
+              <polygon id="radarShape" class="radar-score" points="120,120 120,120 120,120"></polygon>
+              <text x="120" y="14" text-anchor="middle">逻辑</text>
+              <text x="214" y="187" text-anchor="middle">论据</text>
+              <text x="26" y="187" text-anchor="middle">表达</text>
+            </svg>
+          </div>
+
+          <div class="score-list">
+            <div>
+              <span>逻辑严密性</span>
+              <strong id="logicScore">--</strong>
+            </div>
+            <div>
+              <span>论据充实度</span>
+              <strong id="evidenceScore">--</strong>
+            </div>
+            <div>
+              <span>表达流畅性</span>
+              <strong id="fluencyScore">--</strong>
+            </div>
+          </div>
+
+          <div class="suggestion-box">
+            <span>改进建议</span>
+            <p id="suggestionText">完成三轮辩论后生成。</p>
+          </div>
+
+          <button id="evaluateButton" class="secondary-button" type="button" disabled>生成评分</button>
+        </aside>
+      </main>
+    </div>
+
+    <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
+  </body>
+</html>

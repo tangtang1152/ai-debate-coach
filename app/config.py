@@ -3,9 +3,13 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
+from dotenv import load_dotenv
+
 
 BASE_DIR = Path(__file__).resolve().parents[1]
 DEFAULT_SQLITE_PATH = BASE_DIR / "storage" / "debate_coach.db"
+
+load_dotenv(BASE_DIR / ".env")
 
 
 def _as_bool(value: str | None, default: bool = False) -> bool:
@@ -32,6 +36,11 @@ def _resolve_database_uri(uri: str) -> str:
     return f"sqlite:///{resolved.as_posix()}"
 
 
+def _as_list(value: str | None, default: str) -> list[str]:
+    source = value if value is not None else default
+    return [item.strip() for item in source.split(",") if item.strip()]
+
+
 class BaseConfig:
     APP_NAME = os.getenv("APP_NAME", "ai-debate-coach-backend")
     APP_ENV = os.getenv("APP_ENV", "development")
@@ -44,6 +53,11 @@ class BaseConfig:
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     JSON_AS_ASCII = False
 
+    CORS_ORIGINS = _as_list(
+        os.getenv("CORS_ORIGINS"),
+        "http://127.0.0.1:5173,http://localhost:5173",
+    )
+
     LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
 
     MAX_DEBATE_ROUNDS = int(os.getenv("MAX_DEBATE_ROUNDS", "3"))
@@ -54,7 +68,13 @@ class BaseConfig:
     LLM_API_BASE_URL = os.getenv("LLM_API_BASE_URL", "https://api.openai.com/v1")
     LLM_API_KEY = os.getenv("LLM_API_KEY", "")
     LLM_MODEL = os.getenv("LLM_MODEL", "gpt-4o-mini")
+    LLM_FALLBACK_MODELS = _as_list(os.getenv("LLM_FALLBACK_MODELS"), "")
     LLM_TIMEOUT_SECONDS = int(os.getenv("LLM_TIMEOUT_SECONDS", "30"))
+    LLM_DEBATE_MAX_TOKENS = int(os.getenv("LLM_DEBATE_MAX_TOKENS", "320"))
+    LLM_EVALUATION_MAX_TOKENS = int(os.getenv("LLM_EVALUATION_MAX_TOKENS", "500"))
+    LLM_REASONING_EFFORT = os.getenv("LLM_REASONING_EFFORT", "none")
+    OPENROUTER_HTTP_REFERER = os.getenv("OPENROUTER_HTTP_REFERER", "")
+    OPENROUTER_APP_TITLE = os.getenv("OPENROUTER_APP_TITLE", "AI Debate Coach")
 
 
 class TestingConfig(BaseConfig):

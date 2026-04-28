@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 
 from app.config import get_config
 from app.controllers.debate_controller import debate_bp
@@ -21,6 +21,7 @@ def create_app(test_config: dict | None = None) -> Flask:
     db.init_app(app)
 
     app.register_blueprint(debate_bp, url_prefix="/api/debate")
+    _register_cors(app)
     _register_error_handlers(app)
     _register_health_check(app)
 
@@ -57,6 +58,27 @@ def _register_error_handlers(app: Flask) -> None:
             }
         }
         return jsonify(payload), 500
+
+
+def _register_cors(app: Flask) -> None:
+    @app.after_request
+    def add_cors_headers(response):
+        origin = request.headers.get("Origin")
+        allowed_origins = app.config.get("CORS_ORIGINS", [])
+
+        allow_origin = None
+        if "*" in allowed_origins:
+            allow_origin = origin or "*"
+        elif origin in allowed_origins:
+            allow_origin = origin
+
+        if allow_origin:
+            response.headers["Access-Control-Allow-Origin"] = allow_origin
+            response.headers["Vary"] = "Origin"
+            response.headers["Access-Control-Allow-Methods"] = "GET,POST,OPTIONS"
+            response.headers["Access-Control-Allow-Headers"] = "Content-Type,Authorization"
+
+        return response
 
 
 def _register_health_check(app: Flask) -> None:
