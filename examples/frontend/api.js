@@ -33,13 +33,17 @@ export async function startDebate({
   baseUrl = DEFAULT_BASE_URL,
   topic,
   position,
+  model,
 }) {
+  const payload = { topic, position };
+  if (model) payload.model = model;
+
   const response = await fetch(`${baseUrl}/api/debate/start`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ topic, position }),
+    body: JSON.stringify(payload),
   });
 
   return ensureJsonResponse(response);

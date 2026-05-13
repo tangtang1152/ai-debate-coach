@@ -43,7 +43,10 @@ class DebateService:
         def event_stream():
             collected_chunks: list[str] = []
             try:
-                for chunk in self.llm_client.stream_debate_reply(prompt_messages):
+                for chunk in self.llm_client.stream_debate_reply(
+                    prompt_messages,
+                    model=session.model_name,
+                ):
                     if not chunk:
                         continue
                     collected_chunks.append(chunk)

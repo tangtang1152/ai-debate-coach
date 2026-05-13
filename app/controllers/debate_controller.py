@@ -61,12 +61,14 @@ def start_debate():
     session = _build_session_service().create_session(
         topic=payload.topic,
         position=payload.position,
+        model_name=payload.model,
     )
     return success_response(
         {
             "session_id": session.id,
             "topic": session.topic,
             "position": session.position,
+            "model": session.model_name,
             "current_round": session.current_round,
             "status": session.status,
         },

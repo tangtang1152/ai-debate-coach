@@ -63,6 +63,16 @@
               </label>
             </fieldset>
 
+            <label class="field-group">
+              <span>模型</span>
+              <select id="modelSelect">
+                <option value="qwen/qwen3-next-80b-a3b-instruct:free" selected>Qwen 默认模型</option>
+                <option value="tencent/hy3-preview:free">Tencent Hunyuan</option>
+                <option value="google/gemma-4-31b-it:free">Google Gemma</option>
+                <option value="qwen/qwen3-coder:free">Qwen Coder</option>
+              </select>
+            </label>
+
             <button id="startButton" class="primary-button" type="submit">开始训练</button>
           </form>
 
@@ -74,6 +84,10 @@
             <div>
               <span>状态</span>
               <strong id="phaseMeta">待开始</strong>
+            </div>
+            <div>
+              <span>模型</span>
+              <strong id="modelMeta">Qwen 默认模型</strong>
             </div>
           </div>
         </aside>

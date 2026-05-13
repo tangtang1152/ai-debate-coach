@@ -8,6 +8,12 @@ from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parents[1]
 DEFAULT_SQLITE_PATH = BASE_DIR / "storage" / "debate_coach.db"
+DEFAULT_SELECTABLE_MODELS = (
+    "qwen/qwen3-next-80b-a3b-instruct:free,"
+    "tencent/hy3-preview:free,"
+    "google/gemma-4-31b-it:free,"
+    "qwen/qwen3-coder:free"
+)
 
 load_dotenv(BASE_DIR / ".env")
 
@@ -41,6 +47,16 @@ def _as_list(value: str | None, default: str) -> list[str]:
     return [item.strip() for item in source.split(",") if item.strip()]
 
 
+def _unique(values: list[str]) -> list[str]:
+    seen: set[str] = set()
+    result: list[str] = []
+    for value in values:
+        if value and value not in seen:
+            result.append(value)
+            seen.add(value)
+    return result
+
+
 class BaseConfig:
     APP_NAME = os.getenv("APP_NAME", "ai-debate-coach-backend")
     APP_ENV = os.getenv("APP_ENV", "development")
@@ -69,6 +85,13 @@ class BaseConfig:
     LLM_API_KEY = os.getenv("LLM_API_KEY", "")
     LLM_MODEL = os.getenv("LLM_MODEL", "gpt-4o-mini")
     LLM_FALLBACK_MODELS = _as_list(os.getenv("LLM_FALLBACK_MODELS"), "")
+    LLM_SELECTABLE_MODELS = _unique(
+        [
+            LLM_MODEL,
+            *LLM_FALLBACK_MODELS,
+            *_as_list(os.getenv("LLM_SELECTABLE_MODELS"), DEFAULT_SELECTABLE_MODELS),
+        ]
+    )
     LLM_TIMEOUT_SECONDS = int(os.getenv("LLM_TIMEOUT_SECONDS", "30"))
     LLM_DEBATE_MAX_TOKENS = int(os.getenv("LLM_DEBATE_MAX_TOKENS", "320"))
     LLM_EVALUATION_MAX_TOKENS = int(os.getenv("LLM_EVALUATION_MAX_TOKENS", "500"))

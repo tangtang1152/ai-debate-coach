@@ -5,6 +5,7 @@
 ## 功能
 
 - 辩题输入与正反方选择
+- 默认使用 Qwen 模型，并支持开始训练前切换可选模型
 - 固定 3 回合 AI 辩论流程
 - SSE 流式 AI 反驳展示
 - 会话、消息与评分结果持久化
@@ -82,7 +83,10 @@ LLM_API_BASE_URL=https://openrouter.ai/api/v1
 LLM_API_KEY=你的_OpenRouter_Key
 LLM_MODEL=qwen/qwen3-next-80b-a3b-instruct:free
 LLM_FALLBACK_MODELS=tencent/hy3-preview:free,google/gemma-4-31b-it:free
+LLM_SELECTABLE_MODELS=qwen/qwen3-next-80b-a3b-instruct:free,tencent/hy3-preview:free,google/gemma-4-31b-it:free,qwen/qwen3-coder:free
 ```
+
+前端默认选择 `qwen/qwen3-next-80b-a3b-instruct:free`。用户可以在开始训练前切换模型，后端会把本场会话使用的模型保存到 `sessions.model_name`，后续三轮辩论和评分都会沿用该模型。`LLM_SELECTABLE_MODELS` 用作后端白名单，避免前端传入任意模型名。
 
 如果 `LLM_API_KEY` 为空，后端会回退到 mock 回复，方便本地流程测试。正式演示时请填写有效 key。
 

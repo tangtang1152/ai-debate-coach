@@ -9,9 +9,14 @@ from app.repositories.message_repository import MessageRepository
 def test_evaluate_api(client, app, monkeypatch):
     response = client.post(
         "/api/debate/start",
-        json={"topic": "短视频平台是否提升了公共讨论质量", "position": "反方"},
+        json={
+            "topic": "短视频平台是否提升了公共讨论质量",
+            "position": "反方",
+            "model": "google/gemma-4-31b-it:free",
+        },
     )
     session_id = response.get_json()["session_id"]
+    observed_models = []
 
     with app.app_context():
         session = db.session.get(Session, session_id)
@@ -29,8 +34,9 @@ def test_evaluate_api(client, app, monkeypatch):
     monkeypatch.setattr(
         LLMClient,
         "generate_evaluation",
-        lambda self, messages: (
-            '{"logic_score": 8, "evidence_score": 7, '
+        lambda self, messages, model=None: (
+            observed_models.append(model)
+            or '{"logic_score": 8, "evidence_score": 7, '
             '"fluency_score": 6, "suggestion": "继续补强数据支撑。"}'
         ),
     )
@@ -46,3 +52,4 @@ def test_evaluate_api(client, app, monkeypatch):
     assert data["evidence_score"] == 7
     assert data["fluency_score"] == 6
     assert data["fallback_used"] is False
+    assert observed_models == ["google/gemma-4-31b-it:free"]

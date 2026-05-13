@@ -12,11 +12,14 @@ def test_stream_api_persists_messages_and_updates_round(client, app, monkeypatch
         json={
             "topic": "Should AI-assisted learning be widely adopted in universities?",
             "position": "\u6b63\u65b9",
+            "model": "qwen/qwen3-coder:free",
         },
     )
     session_id = start_response.get_json()["session_id"]
+    observed_models = []
 
-    def fake_stream(self, messages):
+    def fake_stream(self, messages, model=None):
+        observed_models.append(model)
         yield "First chunk. "
         yield "Second chunk."
 
@@ -49,6 +52,8 @@ def test_stream_api_persists_messages_and_updates_round(client, app, monkeypatch
         )
 
         assert session.current_round == 1
+        assert session.model_name == "qwen/qwen3-coder:free"
+        assert observed_models == ["qwen/qwen3-coder:free"]
         assert len(messages) == 2
         assert messages[0].role == "user"
         assert messages[0].content == "AI can tailor pace and feedback to each student."
@@ -84,4 +89,3 @@ def test_stream_api_rejects_after_max_rounds(client, app):
     assert response.status_code == 409
     data = response.get_json()
     assert data["error"]["code"] == "conflict"
-

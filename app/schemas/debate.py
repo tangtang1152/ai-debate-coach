@@ -9,6 +9,7 @@ from app.utils.errors import ValidationError
 class StartDebateRequest:
     topic: str
     position: str
+    model: str | None = None
 
 
 @dataclass(slots=True)
@@ -26,11 +27,12 @@ def parse_start_payload(payload: dict | None) -> StartDebateRequest:
     payload = _ensure_payload(payload)
     topic = _require_text(payload, "topic", max_length=100)
     position = _require_text(payload, "position", max_length=20)
+    model = _optional_text(payload, "model", max_length=120)
 
     if position not in {"正方", "反方"}:
         raise ValidationError("position 只允许为“正方”或“反方”。")
 
-    return StartDebateRequest(topic=topic, position=position)
+    return StartDebateRequest(topic=topic, position=position, model=model)
 
 
 def parse_stream_payload(payload: dict | None) -> StreamDebateRequest:
@@ -60,6 +62,24 @@ def _require_text(payload: dict, key: str, max_length: int | None = None) -> str
         raise ValidationError(f"{key} 不能为空。")
 
     cleaned = value.strip()
+    if max_length is not None and len(cleaned) > max_length:
+        raise ValidationError(f"{key} 长度不能超过 {max_length} 个字符。")
+
+    return cleaned
+
+
+def _optional_text(payload: dict, key: str, max_length: int | None = None) -> str | None:
+    value = payload.get(key)
+    if value is None:
+        return None
+
+    if not isinstance(value, str):
+        raise ValidationError(f"{key} 必须是字符串。")
+
+    cleaned = value.strip()
+    if not cleaned:
+        return None
+
     if max_length is not None and len(cleaned) > max_length:
         raise ValidationError(f"{key} 长度不能超过 {max_length} 个字符。")
 

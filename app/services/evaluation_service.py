@@ -47,7 +47,10 @@ class EvaluationService:
             raise ConflictError("当前会话没有可用于评分的消息历史。")
 
         prompt_messages = self.prompt_builder.build_evaluation_messages(session, history)
-        raw_text = self.llm_client.generate_evaluation(prompt_messages)
+        raw_text = self.llm_client.generate_evaluation(
+            prompt_messages,
+            model=session.model_name,
+        )
         parsed = self.evaluation_parser.parse(raw_text)
 
         evaluation = self.evaluation_repository.create(

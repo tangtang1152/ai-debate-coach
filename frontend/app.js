@@ -1,6 +1,14 @@
 const MAX_ROUNDS = 3;
 const STORAGE_KEY = "argument-arena-api-base";
 const DEFAULT_API_BASE_URL = "http://127.0.0.1:8000";
+const DEFAULT_MODEL = "qwen/qwen3-next-80b-a3b-instruct:free";
+
+const modelLabels = {
+  "qwen/qwen3-next-80b-a3b-instruct:free": "Qwen 默认模型",
+  "tencent/hy3-preview:free": "Tencent Hunyuan",
+  "google/gemma-4-31b-it:free": "Google Gemma",
+  "qwen/qwen3-coder:free": "Qwen Coder",
+};
 
 const phaseText = {
   setup: "待开始",
@@ -16,11 +24,13 @@ const els = {
   apiBaseUrl: document.querySelector("#apiBaseUrl"),
   setupForm: document.querySelector("#setupForm"),
   topicInput: document.querySelector("#topicInput"),
+  modelSelect: document.querySelector("#modelSelect"),
   startButton: document.querySelector("#startButton"),
   resetButton: document.querySelector("#resetButton"),
   exampleTopics: document.querySelectorAll("[data-topic]"),
   sessionMeta: document.querySelector("#sessionMeta"),
   phaseMeta: document.querySelector("#phaseMeta"),
+  modelMeta: document.querySelector("#modelMeta"),
   debateContext: document.querySelector("#debateContext"),
   messageList: document.querySelector("#messageList"),
   messageForm: document.querySelector("#messageForm"),
@@ -43,6 +53,7 @@ const state = {
   sessionId: "",
   topic: "",
   position: "正方",
+  model: DEFAULT_MODEL,
   currentRound: 0,
   phase: "setup",
   messages: [],
@@ -77,6 +88,14 @@ function getSelectedPosition() {
   return new FormData(els.setupForm).get("position") || "正方";
 }
 
+function getSelectedModel() {
+  return els.modelSelect.value || DEFAULT_MODEL;
+}
+
+function getModelLabel(model) {
+  return modelLabels[model] || model || "未设置";
+}
+
 function validateTopic(topic) {
   if (!topic) return "请输入辩题。";
   if (topic.length > 100) return "辩题长度不能超过 100 字。";
@@ -94,6 +113,7 @@ function resetSession() {
   state.sessionId = "";
   state.topic = "";
   state.position = getSelectedPosition();
+  state.model = getSelectedModel();
   state.currentRound = 0;
   state.phase = "setup";
   state.messages = [];
@@ -104,13 +124,13 @@ function resetSession() {
   render();
 }
 
-async function startDebate(topic, position) {
+async function startDebate(topic, position, model) {
   const response = await fetch(`${getApiBaseUrl()}/api/debate/start`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ topic, position }),
+    body: JSON.stringify({ topic, position, model }),
   });
 
   return ensureJsonResponse(response);
@@ -202,6 +222,7 @@ async function handleSetupSubmit(event) {
 
   const topic = els.topicInput.value.trim();
   const position = getSelectedPosition();
+  const model = getSelectedModel();
   const error = validateTopic(topic);
   if (error) {
     showToast(error);
@@ -212,10 +233,11 @@ async function handleSetupSubmit(event) {
   els.startButton.disabled = true;
 
   try {
-    const session = await startDebate(topic, position);
+    const session = await startDebate(topic, position, model);
     state.sessionId = session.session_id;
     state.topic = session.topic;
     state.position = session.position;
+    state.model = session.model || model;
     state.currentRound = session.current_round;
     state.phase = "created";
     showToast("会话已创建。");
@@ -375,16 +397,19 @@ function render() {
 function renderMeta() {
   els.sessionMeta.textContent = state.sessionId || "未创建";
   els.phaseMeta.textContent = phaseText[state.phase] || "待开始";
+  els.modelMeta.textContent = getModelLabel(state.model);
 }
 
 function renderSetup() {
   const isBusy = state.phase === "streaming" || state.phase === "evaluating";
-  els.startButton.disabled = isBusy;
-  els.topicInput.disabled = isBusy;
+  const hasActiveSession = Boolean(state.sessionId);
+  els.startButton.disabled = isBusy || hasActiveSession;
+  els.topicInput.disabled = isBusy || hasActiveSession;
+  els.modelSelect.disabled = isBusy || hasActiveSession;
   els.setupForm
     .querySelectorAll('input[name="position"]')
     .forEach((input) => {
-      input.disabled = isBusy;
+      input.disabled = isBusy || hasActiveSession;
     });
 }
 
@@ -398,7 +423,8 @@ function renderDebateHeader() {
   }
 
   const assistantPosition = state.position === "正方" ? "反方" : "正方";
-  els.debateContext.textContent = `辩题：${state.topic}｜你方：${state.position}｜AI：${assistantPosition}`;
+  els.debateContext.textContent =
+    `辩题：${state.topic}｜你方：${state.position}｜AI：${assistantPosition}｜模型：${getModelLabel(state.model)}`;
 }
 
 function renderMessages() {
@@ -537,6 +563,13 @@ function bindEvents() {
   els.apiBaseUrl.addEventListener("change", () => {
     window.localStorage.setItem(STORAGE_KEY, getApiBaseUrl());
   });
+
+  els.modelSelect.addEventListener("change", () => {
+    if (!state.sessionId) {
+      state.model = getSelectedModel();
+      renderMeta();
+    }
+  });
 }
 
 function init() {
@@ -556,6 +589,7 @@ function init() {
     window.localStorage.setItem(STORAGE_KEY, DEFAULT_API_BASE_URL);
   }
   bindEvents();
+  state.model = getSelectedModel();
   render();
 }
 

@@ -23,7 +23,7 @@ class LLMClient:
         self.openrouter_http_referer = config.get("OPENROUTER_HTTP_REFERER", "")
         self.openrouter_app_title = config.get("OPENROUTER_APP_TITLE", "AI Debate Coach")
 
-    def stream_debate_reply(self, messages: list[dict]):
+    def stream_debate_reply(self, messages: list[dict], model: str | None = None):
         if self.provider == "mock" or not self.api_key:
             text = self._mock_debate_reply(messages)
             for index in range(0, len(text), self.mock_chunk_size):
@@ -34,24 +34,27 @@ class LLMClient:
             messages,
             temperature=0.7,
             max_tokens=self.debate_max_tokens,
+            model=model,
         )
 
-    def generate_debate_reply(self, messages: list[dict]) -> str:
+    def generate_debate_reply(self, messages: list[dict], model: str | None = None) -> str:
         if self.provider == "mock" or not self.api_key:
             return self._mock_debate_reply(messages)
         return self._chat_completion(
             messages,
             temperature=0.7,
             max_tokens=self.debate_max_tokens,
+            model=model,
         )
 
-    def generate_evaluation(self, messages: list[dict]) -> str:
+    def generate_evaluation(self, messages: list[dict], model: str | None = None) -> str:
         if self.provider == "mock" or not self.api_key:
             return self._mock_evaluation(messages)
         return self._chat_completion(
             messages,
             temperature=0.2,
             max_tokens=self.evaluation_max_tokens,
+            model=model,
         )
 
     def _chat_completion(
@@ -59,18 +62,23 @@ class LLMClient:
         messages: list[dict],
         temperature: float,
         max_tokens: int,
+        model: str | None = None,
     ) -> str:
         last_error: LLMClientError | None = None
-        for model in self.models:
+        for current_model in self._models_for(model):
             try:
                 return self._chat_completion_once(
-                    model=model,
+                    model=current_model,
                     messages=messages,
                     temperature=temperature,
                     max_tokens=max_tokens,
                 )
             except LLMClientError as exc:
-                current_app.logger.warning("LLM request failed for model %s: %s", model, exc.message)
+                current_app.logger.warning(
+                    "LLM request failed for model %s: %s",
+                    current_model,
+                    exc.message,
+                )
                 last_error = exc
 
         if last_error is not None:
@@ -121,13 +129,14 @@ class LLMClient:
         messages: list[dict],
         temperature: float,
         max_tokens: int,
+        model: str | None = None,
     ):
         last_error: LLMClientError | None = None
-        for model in self.models:
+        for current_model in self._models_for(model):
             emitted = False
             try:
                 for chunk in self._chat_completion_stream_once(
-                    model=model,
+                    model=current_model,
                     messages=messages,
                     temperature=temperature,
                     max_tokens=max_tokens,
@@ -140,7 +149,7 @@ class LLMClient:
                     raise
                 current_app.logger.warning(
                     "LLM stream request failed for model %s: %s",
-                    model,
+                    current_model,
                     exc.message,
                 )
                 last_error = exc
@@ -245,6 +254,15 @@ class LLMClient:
             payload["include_reasoning"] = False
 
         return payload
+
+    def _models_for(self, model: str | None = None) -> list[str]:
+        preferred_model = (model or self.model).strip()
+        ordered_models = [preferred_model, *self.models]
+        unique_models: list[str] = []
+        for item in ordered_models:
+            if item and item not in unique_models:
+                unique_models.append(item)
+        return unique_models
 
     def _mock_debate_reply(self, messages: list[dict]) -> str:
         user_message = messages[-1]["content"].strip()

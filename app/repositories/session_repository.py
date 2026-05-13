@@ -5,8 +5,8 @@ from app.models.session import Session
 
 
 class SessionRepository:
-    def create(self, topic: str, position: str) -> Session:
-        session = Session(topic=topic, position=position)
+    def create(self, topic: str, position: str, model_name: str) -> Session:
+        session = Session(topic=topic, position=position, model_name=model_name)
         db.session.add(session)
         return session
 

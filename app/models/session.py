@@ -16,6 +16,7 @@ class Session(db.Model):
     id = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid4()))
     topic = db.Column(db.String(100), nullable=False)
     position = db.Column(db.String(20), nullable=False)
+    model_name = db.Column(db.String(120), nullable=False)
     current_round = db.Column(db.Integer, nullable=False, default=0)
     created_at = db.Column(db.DateTime, nullable=False, default=utcnow)
     updated_at = db.Column(
