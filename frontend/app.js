@@ -1,7 +1,9 @@
 const MAX_ROUNDS = 3;
 const STORAGE_KEY = "argument-arena-api-base";
+const LAST_SESSION_KEY = "argument-arena-last-session";
 const DEFAULT_API_BASE_URL = "http://127.0.0.1:8000";
 const DEFAULT_MODEL = "qwen/qwen3-next-80b-a3b-instruct:free";
+const TYPEWRITER_DELAY_MS = 18;
 
 const modelLabels = {
   "qwen/qwen3-next-80b-a3b-instruct:free": "Qwen 默认模型",
@@ -15,6 +17,7 @@ const phaseText = {
   created: "等待发言",
   streaming: "AI 生成中",
   waiting_next_round: "等待下一轮",
+  ready_for_evaluation: "等待评分",
   evaluating: "评分生成中",
   finished: "已完成",
   error: "需要处理",
@@ -27,6 +30,7 @@ const els = {
   modelSelect: document.querySelector("#modelSelect"),
   startButton: document.querySelector("#startButton"),
   resetButton: document.querySelector("#resetButton"),
+  refreshHistoryButton: document.querySelector("#refreshHistoryButton"),
   exampleTopics: document.querySelectorAll("[data-topic]"),
   sessionMeta: document.querySelector("#sessionMeta"),
   phaseMeta: document.querySelector("#phaseMeta"),
@@ -46,6 +50,7 @@ const els = {
   suggestionText: document.querySelector("#suggestionText"),
   radarShape: document.querySelector("#radarShape"),
   evaluateButton: document.querySelector("#evaluateButton"),
+  historyList: document.querySelector("#historyList"),
   toast: document.querySelector("#toast"),
 };
 
@@ -58,6 +63,8 @@ const state = {
   phase: "setup",
   messages: [],
   evaluation: null,
+  sessions: [],
+  historyLoading: false,
   lastRoundContent: "",
   lastAssistantId: "",
 };
@@ -82,6 +89,12 @@ function showToast(message) {
   showToast.timer = window.setTimeout(() => {
     els.toast.classList.add("hidden");
   }, 3200);
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
 }
 
 function getSelectedPosition() {
@@ -110,6 +123,7 @@ function validateContent(content) {
 }
 
 function resetSession() {
+  window.localStorage.removeItem(LAST_SESSION_KEY);
   state.sessionId = "";
   state.topic = "";
   state.position = getSelectedPosition();
@@ -124,6 +138,49 @@ function resetSession() {
   render();
 }
 
+function applySessionDetail(session) {
+  state.sessionId = session.session_id;
+  state.topic = session.topic;
+  state.position = session.position;
+  state.model = session.model || DEFAULT_MODEL;
+  state.currentRound = session.current_round;
+  state.messages = (session.messages || []).map((message) => ({
+    id: `saved-${message.id}`,
+    role: message.role,
+    roundNo: message.round_no,
+    content: message.content,
+    status: "done",
+  }));
+  state.evaluation = session.evaluation
+    ? {
+        logicScore: session.evaluation.logic_score,
+        evidenceScore: session.evaluation.evidence_score,
+        fluencyScore: session.evaluation.fluency_score,
+        suggestion: session.evaluation.suggestion,
+        fallbackUsed: false,
+        cached: true,
+      }
+    : null;
+  state.lastRoundContent = "";
+  state.lastAssistantId = "";
+  state.phase = getRestoredPhase();
+  els.topicInput.value = state.topic;
+  els.modelSelect.value = state.model;
+  els.setupForm
+    .querySelectorAll('input[name="position"]')
+    .forEach((input) => {
+      input.checked = input.value === state.position;
+    });
+  window.localStorage.setItem(LAST_SESSION_KEY, state.sessionId);
+}
+
+function getRestoredPhase() {
+  if (state.evaluation) return "finished";
+  if (state.currentRound >= MAX_ROUNDS) return "ready_for_evaluation";
+  if (state.currentRound > 0) return "waiting_next_round";
+  return "created";
+}
+
 async function startDebate(topic, position, model) {
   const response = await fetch(`${getApiBaseUrl()}/api/debate/start`, {
     method: "POST",
@@ -133,6 +190,16 @@ async function startDebate(topic, position, model) {
     body: JSON.stringify({ topic, position, model }),
   });
 
+  return ensureJsonResponse(response);
+}
+
+async function fetchRecentSessions() {
+  const response = await fetch(`${getApiBaseUrl()}/api/debate/sessions`);
+  return ensureJsonResponse(response);
+}
+
+async function fetchSessionDetail(sessionId) {
+  const response = await fetch(`${getApiBaseUrl()}/api/debate/sessions/${sessionId}`);
   return ensureJsonResponse(response);
 }
 
@@ -240,10 +307,44 @@ async function handleSetupSubmit(event) {
     state.model = session.model || model;
     state.currentRound = session.current_round;
     state.phase = "created";
+    window.localStorage.setItem(LAST_SESSION_KEY, session.session_id);
     showToast("会话已创建。");
+    loadRecentSessions();
   } catch (err) {
     state.phase = "setup";
     showToast(err.message || "创建会话失败。");
+  } finally {
+    render();
+  }
+}
+
+async function loadRecentSessions() {
+  state.historyLoading = true;
+  renderHistory();
+
+  try {
+    const data = await fetchRecentSessions();
+    state.sessions = data.sessions || [];
+  } catch (err) {
+    showToast(err.message || "历史会话加载失败。");
+  } finally {
+    state.historyLoading = false;
+    renderHistory();
+  }
+}
+
+async function restoreSession(sessionId, { silent = false } = {}) {
+  if (!sessionId) return;
+
+  try {
+    const session = await fetchSessionDetail(sessionId);
+    applySessionDetail(session);
+    if (!silent) showToast("已恢复历史会话。");
+  } catch (err) {
+    if (window.localStorage.getItem(LAST_SESSION_KEY) === sessionId) {
+      window.localStorage.removeItem(LAST_SESSION_KEY);
+    }
+    if (!silent) showToast(err.message || "会话恢复失败。");
   } finally {
     render();
   }
@@ -306,28 +407,38 @@ async function runRound(content, { appendUser }) {
   setPhase("streaming");
   scrollMessagesToBottom();
 
+  const typewriter = createTypewriter(assistantId);
+  let donePayload = null;
+
   try {
     await streamDebateRound({
       sessionId: state.sessionId,
       content,
       onChunk(payload) {
-        appendAssistantChunk(assistantId, payload.content);
+        typewriter.enqueue(payload.content);
       },
       onDone(payload) {
-        markAssistantDone(assistantId);
-        state.currentRound = payload.current_round;
-        state.phase = payload.is_final_round ? "evaluating" : "waiting_next_round";
-        render();
+        donePayload = payload;
       },
       onError(payload) {
         throwStreamError(assistantId, payload.message);
       },
     });
 
+    await typewriter.flush();
+
+    if (donePayload) {
+      markAssistantDone(assistantId);
+      state.currentRound = donePayload.current_round;
+      state.phase = donePayload.is_final_round ? "evaluating" : "waiting_next_round";
+      render();
+    }
+
     if (state.phase === "evaluating") {
       await generateEvaluation();
     }
   } catch (err) {
+    typewriter.stop();
     markAssistantError(assistantId, err.message || "流式生成失败，请重试。");
     state.phase = "error";
     showToast(err.message || "流式生成失败，请重试。");
@@ -346,6 +457,53 @@ function appendAssistantChunk(messageId, content) {
   message.content += content;
   renderMessages();
   scrollMessagesToBottom();
+}
+
+function createTypewriter(messageId) {
+  const queue = [];
+  const flushResolvers = [];
+  let active = false;
+  let stopped = false;
+
+  function resolveFlushIfIdle() {
+    if (active || queue.length) return;
+    while (flushResolvers.length) {
+      flushResolvers.shift()();
+    }
+  }
+
+  async function pump() {
+    if (active) return;
+    active = true;
+
+    while (queue.length && !stopped) {
+      appendAssistantChunk(messageId, queue.shift());
+      await sleep(TYPEWRITER_DELAY_MS);
+    }
+
+    active = false;
+    resolveFlushIfIdle();
+  }
+
+  return {
+    enqueue(content) {
+      if (stopped || !content) return;
+      queue.push(...Array.from(content));
+      pump();
+    },
+    flush() {
+      if (!active && !queue.length) return Promise.resolve();
+      return new Promise((resolve) => {
+        flushResolvers.push(resolve);
+        resolveFlushIfIdle();
+      });
+    },
+    stop() {
+      stopped = true;
+      queue.length = 0;
+      resolveFlushIfIdle();
+    },
+  };
 }
 
 function markAssistantDone(messageId) {
@@ -392,6 +550,7 @@ function render() {
   renderMessages();
   renderComposer();
   renderReport();
+  renderHistory();
 }
 
 function renderMeta() {
@@ -512,6 +671,39 @@ function renderReport() {
   ]);
 }
 
+function renderHistory() {
+  if (state.historyLoading) {
+    els.historyList.innerHTML = `<p class="history-empty">正在加载...</p>`;
+    return;
+  }
+
+  if (!state.sessions.length) {
+    els.historyList.innerHTML = `<p class="history-empty">暂无历史会话</p>`;
+    return;
+  }
+
+  els.historyList.innerHTML = state.sessions
+    .map((session) => {
+      const activeClass = session.session_id === state.sessionId ? "active" : "";
+      const status = session.has_evaluation
+        ? "已评分"
+        : `${session.current_round} / ${MAX_ROUNDS} 回合`;
+      return `
+        <button class="history-item ${activeClass}" type="button" data-session-id="${session.session_id}">
+          <span>${escapeHtml(session.topic)}</span>
+          <small>${escapeHtml(session.position)} · ${status}</small>
+        </button>
+      `;
+    })
+    .join("");
+
+  els.historyList.querySelectorAll("[data-session-id]").forEach((button) => {
+    button.addEventListener("click", () => {
+      restoreSession(button.dataset.sessionId);
+    });
+  });
+}
+
 function updateRadar(scores) {
   const center = { x: 120, y: 120 };
   const vertices = [
@@ -551,6 +743,7 @@ function bindEvents() {
   els.messageForm.addEventListener("submit", handleMessageSubmit);
   els.retryButton.addEventListener("click", retryLastRound);
   els.resetButton.addEventListener("click", resetSession);
+  els.refreshHistoryButton.addEventListener("click", loadRecentSessions);
   els.evaluateButton.addEventListener("click", generateEvaluation);
 
   els.exampleTopics.forEach((button) => {
@@ -591,6 +784,10 @@ function init() {
   bindEvents();
   state.model = getSelectedModel();
   render();
+  loadRecentSessions().then(() => {
+    const lastSessionId = window.localStorage.getItem(LAST_SESSION_KEY);
+    if (lastSessionId) restoreSession(lastSessionId, { silent: true });
+  });
 }
 
 init();

@@ -15,10 +15,59 @@ from app.services.debate_service import DebateService
 from app.services.evaluation_service import EvaluationService
 from app.services.session_service import SessionService
 from app.utils.evaluation_parser import EvaluationParser
+from app.utils.errors import NotFoundError
 from app.utils.http import success_response
 from app.utils.prompt_builder import PromptBuilder
 
 debate_bp = Blueprint("debate", __name__)
+
+
+def _isoformat(value):
+    return value.isoformat(timespec="seconds") if value else None
+
+
+def _serialize_evaluation(evaluation):
+    if not evaluation:
+        return None
+
+    return {
+        "logic_score": evaluation.logic_score,
+        "evidence_score": evaluation.evidence_score,
+        "fluency_score": evaluation.fluency_score,
+        "suggestion": evaluation.suggestion,
+        "created_at": _isoformat(evaluation.created_at),
+    }
+
+
+def _serialize_message(message):
+    return {
+        "id": message.id,
+        "role": message.role,
+        "content": message.content,
+        "round_no": message.round_no,
+        "created_at": _isoformat(message.created_at),
+    }
+
+
+def _serialize_session_summary(session):
+    return {
+        "session_id": session.id,
+        "topic": session.topic,
+        "position": session.position,
+        "model": session.model_name,
+        "current_round": session.current_round,
+        "status": session.status,
+        "updated_at": _isoformat(session.updated_at),
+        "has_evaluation": bool(session.evaluation),
+    }
+
+
+def _serialize_session_detail(session):
+    data = _serialize_session_summary(session)
+    data["created_at"] = _isoformat(session.created_at)
+    data["messages"] = [_serialize_message(message) for message in session.messages]
+    data["evaluation"] = _serialize_evaluation(session.evaluation)
+    return data
 
 
 def _build_session_service() -> SessionService:
@@ -53,6 +102,27 @@ def _build_evaluation_service() -> EvaluationService:
         evaluation_parser=EvaluationParser(),
         max_rounds=current_app.config["MAX_DEBATE_ROUNDS"],
     )
+
+
+@debate_bp.get("/sessions")
+def list_sessions():
+    sessions = SessionRepository().list_recent()
+    return success_response(
+        {
+            "sessions": [
+                _serialize_session_summary(session) for session in sessions
+            ]
+        }
+    )
+
+
+@debate_bp.get("/sessions/<session_id>")
+def get_session_detail(session_id: str):
+    session = SessionRepository().get_by_id(session_id)
+    if not session:
+        raise NotFoundError("会话不存在或已被清理。")
+
+    return success_response(_serialize_session_detail(session))
 
 
 @debate_bp.post("/start")

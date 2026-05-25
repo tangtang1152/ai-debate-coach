@@ -13,6 +13,9 @@ class SessionRepository:
     def get_by_id(self, session_id: str) -> Session | None:
         return Session.query.filter_by(id=session_id).first()
 
+    def list_recent(self, limit: int = 8) -> list[Session]:
+        return Session.query.order_by(Session.updated_at.desc()).limit(limit).all()
+
     def save(self, session: Session) -> Session:
         db.session.add(session)
         return session

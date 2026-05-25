@@ -317,6 +317,12 @@ select:focus,
   border-color: var(--muted);
 }
 
+.compact-button {
+  min-height: 34px;
+  padding: 0 12px;
+  font-size: 12px;
+}
+
 .meta-panel {
   display: grid;
   gap: 10px;
@@ -347,6 +353,73 @@ select:focus,
   color: var(--ink);
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.history-panel {
+  display: grid;
+  gap: 12px;
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+
+.history-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.history-head h2 {
+  font-size: 16px;
+}
+
+.history-list {
+  display: grid;
+  gap: 8px;
+  max-height: 260px;
+  overflow: auto;
+}
+
+.history-item {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px;
+  background: #fbfcfe;
+  color: var(--ink);
+  text-align: left;
+}
+
+.history-item:hover,
+.history-item.active {
+  border-color: var(--teal);
+  background: var(--green-soft);
+}
+
+.history-item span {
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.history-item small,
+.history-empty {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.history-empty {
+  margin: 0;
+  padding: 10px;
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  text-align: center;
 }
 
 .round-meter {
